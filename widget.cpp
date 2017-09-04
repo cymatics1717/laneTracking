@@ -4,7 +4,7 @@
 #include <QDebug>
 widget::widget(QWidget *parent) : QWidget(parent),media(new mediaSource)
 {
-
+    connect(this,SIGNAL(seek(int)),media,SLOT(seek(int)));
     media->setSource("/home/wayne/Downloads/highwayKR.avi");
 
     worker = new QThread;
@@ -30,12 +30,13 @@ void widget::paintEvent(QPaintEvent *event)
 {
     QPainter p(this);
     p.drawImage(0,0,media->currentImage());
+    p.drawImage(media->currentImage().width(),0,media->BWImage());
 }
 
 void widget::mousePressEvent(QMouseEvent *event)
 {
-    qDebug()<<QString(100,'=') <<event->pos();
-//    media->stop();
+    qDebug()<<QString(100,'=') <<event->pos()<<","<<width();
+    emit seek(event->pos().x()*100/width());
 }
 
 void widget::incomingImage()

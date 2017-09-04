@@ -17,6 +17,8 @@ protected:
     void mousePressEvent(QMouseEvent *event)  Q_DECL_OVERRIDE;
 public slots:
     void incomingImage();
+signals:
+    void seek(int);
 private:
 //    QSharedPointer<mediaSource> media;
     mediaSource *media;

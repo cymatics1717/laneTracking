@@ -6,6 +6,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    setGeometry(50,100,1700,480);
 }
 
 MainWindow::~MainWindow()

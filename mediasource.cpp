@@ -5,6 +5,11 @@
 #include <QThread>
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+
+static bool comp (const cv::Vec4i& lhs, const cv::Vec4i& rhs) {
+    return lhs[1] + lhs[3]> rhs[1] + rhs[3];
+}
+
 mediaSource::mediaSource(QObject *parent) : mediaSource("",parent)
 {
 //
@@ -12,8 +17,8 @@ mediaSource::mediaSource(QObject *parent) : mediaSource("",parent)
 
 mediaSource::mediaSource(QString name,QObject *parent)
 {
-    qDebug() << "source = "<<name << setSource(name);
-     ld = new LaneDetection;
+//    qDebug() << "source = "<<name << ;
+    setSource(name);
 }
 
 int mediaSource::setSource(QString name)
@@ -33,87 +38,148 @@ const QImage &mediaSource::currentImage() const
     return current;
 }
 
+const QImage &mediaSource::BWImage() const
+{
+    return bwImage;
+}
+
+void mediaSource::removeLines(const std::vector<cv::Vec4i>& lines, std::set<cv::Vec4i,vec4iComp> &out)
+{
+    std::set<cv::Vec4i,vec4iComp> left(comp),right(comp);
+    int r_max_val = 80, r_min_val = 40;
+    int l_max_val = 150, l_min_val = 100;
+
+    double y_percent = 0.6;
+    int max_x = current.width(), max_y = current.height();
+    static double  last_left= 120;
+    static double  last_right= 70;
+    double left_avg_ang=0,right_avg_ang=0;
+    for (size_t i = 0; i < lines.size(); i++)
+    {
+        cv::Vec4i l = lines[i];
+        double theta_deg = atan2(l[2] - l[0], l[3] - l[1]) * 180 / CV_PI;
+        if ((r_min_val < theta_deg && theta_deg < r_max_val) || (l_min_val < theta_deg && theta_deg < l_max_val))
+        {
+            if((l[3]>y_percent * max_y )&&(l[1])>y_percent * max_y){
+//                out.insert(l);
+                if(l[0]+l[2]<max_x){
+                    left_avg_ang += theta_deg;
+                    left.insert(l);
+                } else {
+                    right_avg_ang += theta_deg;
+                    right.insert(l);
+                }
+            }
+        }
+    }
+    left_avg_ang/=left.size();
+    right_avg_ang/=right.size();
+
+
+    double delta_percent = 0.001;
+    {
+        cv::Vec4i first = *left.begin();
+        for(const cv::Vec4i& l :left){
+            double theta_deg = atan2(l[0] - first[2], l[1] - first[3]) * 180 / CV_PI;
+            if ((r_min_val < theta_deg && theta_deg < r_max_val) || (l_min_val < theta_deg && theta_deg < l_max_val)
+                    || l[0]+l[2]-first[0]-first[2]<delta_percent*max_x)
+            {
+                out.insert(l);
+            }
+        }
+    }
+    {
+        cv::Vec4i first = *right.begin();
+        for(const cv::Vec4i& l :right){
+            double theta_deg = atan2(l[0] - first[2], l[1] - first[3]) * 180 / CV_PI;
+            if ((r_min_val < theta_deg && theta_deg < r_max_val) || (l_min_val < theta_deg && theta_deg < l_max_val)
+                    || l[0]+l[2]-first[0]-first[2]<delta_percent*max_x)
+            {
+                out.insert(l);
+            }
+        }
+    }
+
+    std::cout<<left_avg_ang<<","<<right_avg_ang<<QString("\t[%1]/%2 ").arg(lines.size()).arg(out.size()).toStdString()<<std::endl;
+
+}
+
 void mediaSource::run()
 {
-//    bool verbose_lm_detction = false;
-//    bool verbose_seed_gen = false;
-//    bool verbose_run_crf = false;
-//    bool verbose_validating = true;
-//    bool verbose = verbose_lm_detction | verbose_seed_gen | verbose_run_crf | verbose_validating;
-
-
-    static int cnt = 0;
     QDateTime last = QDateTime::currentDateTime();
     epoch = last;
 
-    cv::Mat edges, frame;
-    cap.read(frame);
+    int total = cap.get(CV_CAP_PROP_FRAME_COUNT);
+
+    startframe =0;
+    // yellow lane
+//    startframe =.45/18.33* total;
+    // strips
+//    startframe =3.3/18.33* total;
+    // poor light
+//    startframe =6.5/18.33* total;
+    qDebug()<< total << cap.set(CV_CAP_PROP_POS_FRAMES, startframe);
+
+    cv::Mat edges, buf, frame;
+    cv::Size S = cv::Size(cap.get(CV_CAP_PROP_FRAME_WIDTH),cap.get(CV_CAP_PROP_FRAME_HEIGHT));
+    cv::VideoWriter writer("/home/wayne/postProc.avi", CV_FOURCC('M', 'J', 'P', 'G'),cap.get(CV_CAP_PROP_FPS), S,true);
 
     while(cap.read(frame))
     {
-//        if (!ld->initialize_variable(frame)) {
-//            return;
-//        }
+        cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(35, 35));
+        cv::morphologyEx(frame, buf, cv::MORPH_CLOSE, element);
+//        cv::medianBlur(buf,buf,3);
+//        cv::GaussianBlur(buf, buf, cv::Size(3,3), 0, 0);
+        cv::bitwise_not(buf, edges);
 
-//        if (!ld->initialize_Img(frame)) {
-//            continue;
-//        }
+        cv::cvtColor(edges, edges, CV_BGR2GRAY);
+        cv::adaptiveThreshold(edges, edges,255,CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY,19,6);
 
-        // detecting lane markings
-//        ld->lane_marking_detection(verbose_lm_detction);
+//        element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2, 2));
+//        cv::morphologyEx(edges, edges, cv::MORPH_DILATE, element);
+        cv::Canny(edges, edges, 0, 1, 3);
 
-        // supermarking generation and low-level association
-//        ld->seed_generation(verbose_seed_gen);
-
-        // CRF graph configuration & optimization using hungarian method
-//        ld->graph_generation(verbose_run_crf);
-
-        // validating
-//        ld->validating_final_seeds(verbose_validating);
-
-
-        cv::cvtColor(frame, edges, cv::COLOR_BGR2GRAY);
-        cv::GaussianBlur(edges, edges, cv::Size(5,5), 0, 0);
-        cv::Canny(edges, edges, 0, 60, 3);
-//////////////////////////////////////////////////////////////////////////
-        int r_max_val = 70, r_min_val = 30;
-        int l_max_val = 180, l_min_val = 110;
-
-        int min_len_val = 40;
-        int y_tresh_val = 60;
-        int max_x,max_y = frame.rows;
-        std::vector<cv::Vec4i> lines;
-        cv::HoughLinesP(edges, lines, 1, CV_PI / 180, 50, min_len_val, 6);
-        for (size_t i = 0; i < lines.size(); i++)
-        {
-            cv::Vec4i l = lines[i];
-            double theta_deg = atan2(l[2] - l[0], l[3] - l[1]) * 180 / CV_PI;
-            if ((r_min_val < theta_deg && theta_deg < r_max_val) || (l_min_val < theta_deg && theta_deg < l_max_val))
-            {
-                if((l[3]>y_tresh_val * max_y / 100)&&(l[1])>y_tresh_val * max_y / 100)
-                    cv::line(frame, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), cv::Scalar(255, 0, 255), 2, CV_AA);
-            }
-        }
 ////////////////////////////////////////////////////////////////////////
+        std::vector<cv::Vec4i> lines;
+        std::set<cv::Vec4i,vec4iComp> out(comp);
+        int min_len_val = 8;
+        cv::HoughLinesP(edges, lines, 1, CV_PI / 180, 10, min_len_val, 0);
+        removeLines(lines,out);
+        for(const cv::Vec4i& l:out){
+            cv::line(frame, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), cv::Scalar(255, 0, 255), 2, CV_AA);
+        }
+//        cv::line(frame, cv::Point(frame.cols/2, frame.rows), cv::Point(frame.cols/2, 0), cv::Scalar(255, 0, 255), 2, CV_AA);
+//        cv::line(frame, cv::Point(0, frame.rows*.6), cv::Point(frame.cols, frame.rows*.6), cv::Scalar(255, 0, 255), 2, CV_AA);
+//////////////////////////////////////////////////////////////////////////
+        int framepos = cap.get(CV_CAP_PROP_POS_FRAMES);
 
-        cvtColor(frame, frame,CV_BGR2RGB);
+        QDateTime now = QDateTime::currentDateTime();
+        QString txt = QString("[%1/%2]:%3ms, avg fps = %4").arg(framepos,3).arg(total)
+                  .arg(last.msecsTo(now),3).arg((framepos-startframe)*1000.0/epoch.msecsTo(now), 0, 'f', 2);
+        last = now;
 
-//        current = QImage(edges.data, edges.cols, edges.rows, edges.step, QImage::Format_Grayscale8);
-        current = QImage(frame.data, frame.cols, frame.rows, frame.step, QImage::Format_RGB888);
+        cv::putText(frame,txt.toStdString(),cv::Point2d(0,30),CV_FONT_HERSHEY_COMPLEX, 1, cv::Scalar(255,0, 255));
+        bwImage = QImage(edges.data, edges.cols, edges.rows, edges.step, QImage::Format_Grayscale8);
+        cvtColor(frame, buf,CV_BGR2RGB);
+        current = QImage(buf.data, buf.cols, buf.rows, buf.step, QImage::Format_RGB888);
         emit incoming();
 
 //////////////////////////////////////////////////////////////////////////
-        QDateTime now = QDateTime::currentDateTime();
-        qDebug()<<QString("[%1]:%2ms, avg fps = %3 f")
-                  .arg(++cnt,3).arg(last.msecsTo(now),3).arg(cnt*1000.0/epoch.msecsTo(now), 0, 'f', 2);
-        last = now;
-        QThread::msleep(10);
+        QThread::msleep(5);
+        writer.write(frame);
     }
-
 }
 
 void mediaSource::stop()
 {
     cap.release();
+}
+
+void mediaSource::seek(int pos)
+{
+//    if(pos<0||pos>100) return;
+    int total = cap.get(CV_CAP_PROP_FRAME_COUNT);
+//    double pos =3/18.33;
+    qDebug()<<pos<< total << cap.set(CV_CAP_PROP_POS_FRAMES, pos*total/100);
 }
 

@@ -5,7 +5,8 @@
 #include <QImage>
 #include <QObject>
 #include "opencv2/opencv.hpp"
-#include "LaneDetection.h"
+
+typedef bool (*vec4iComp) (const cv::Vec4i& lhs, const cv::Vec4i& rhs);
 
 class mediaSource : public QObject
 {
@@ -18,14 +19,18 @@ signals:
 public slots:
     int setSource(QString source);
     const QImage& currentImage() const;
+    const QImage& BWImage() const;
+    void removeLines(const std::vector<cv::Vec4i>& lines, std::set<cv::Vec4i,vec4iComp> &out);
     void run();
     void stop();
+    void seek(int pos);
 private:
     cv::VideoCapture cap;
     QString source;
     QImage current;
+    QImage bwImage;
     QDateTime epoch;
-    LaneDetection *ld;
+    int startframe;
 };
 
 #endif // MEDIASOURCE_H

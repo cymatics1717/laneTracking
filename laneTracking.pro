@@ -30,14 +30,12 @@ SOURCES += \
         main.cpp \
         mainwindow.cpp \
     mediasource.cpp \
-    widget.cpp \
-    LaneDetection.cpp
+    widget.cpp
 
 HEADERS += \
         mainwindow.h \
     widget.h \
-    mediasource.h \
-    LaneDetection.h
+    mediasource.h
 
 FORMS += \
         mainwindow.ui
