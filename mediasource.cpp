@@ -18,7 +18,7 @@ mediaSource::mediaSource(QObject *parent) : mediaSource("",parent)
 mediaSource::mediaSource(QString name,QObject *parent)
 {
 //    qDebug() << "source = "<<name << ;
-    setSource(name);
+//    setSource(name);
 }
 
 int mediaSource::setSource(QString name)
@@ -26,7 +26,7 @@ int mediaSource::setSource(QString name)
     if(cap.isOpened()) cap.release();
     source = name;
     if(name.isEmpty()){
-        cap.open(1);
+        cap.open(0);
     } else {
         cap.open(name.toStdString());
     }
@@ -100,7 +100,7 @@ void mediaSource::removeLines(const std::vector<cv::Vec4i>& lines, std::set<cv::
         }
     }
 
-    std::cout<<left_avg_ang<<","<<right_avg_ang<<QString("\t[%1]/%2 ").arg(lines.size()).arg(out.size()).toStdString()<<std::endl;
+//    std::cout<<left_avg_ang<<","<<right_avg_ang<<QString("\t[%1]/%2 ").arg(lines.size()).arg(out.size()).toStdString()<<std::endl;
 
 }
 
@@ -154,11 +154,13 @@ void mediaSource::run()
         int framepos = cap.get(CV_CAP_PROP_POS_FRAMES);
 
         QDateTime now = QDateTime::currentDateTime();
-        QString txt = QString("[%1/%2]:%3ms, avg fps = %4").arg(framepos,3).arg(total)
-                  .arg(last.msecsTo(now),3).arg((framepos-startframe)*1000.0/epoch.msecsTo(now), 0, 'f', 2);
+        QString txt = QString("[%1][%2/%3] %4ms, fps = %5")
+                .arg(QTime::fromMSecsSinceStartOfDay(epoch.msecsTo(now)).toString("hh:mm:ss.zzz"))
+                .arg(framepos,3).arg(total).arg(last.msecsTo(now),3)
+                .arg((framepos-startframe)*1000.0/epoch.msecsTo(now), 0, 'f', 2);
         last = now;
 
-        cv::putText(frame,txt.toStdString(),cv::Point2d(0,30),CV_FONT_HERSHEY_COMPLEX, 1, cv::Scalar(255,0, 255));
+        cv::putText(frame,txt.toStdString(),cv::Point2d(0,30),CV_FONT_NORMAL, .8, cv::Scalar(255,0, 255));
         bwImage = QImage(edges.data, edges.cols, edges.rows, edges.step, QImage::Format_Grayscale8);
         cvtColor(frame, buf,CV_BGR2RGB);
         current = QImage(buf.data, buf.cols, buf.rows, buf.step, QImage::Format_RGB888);

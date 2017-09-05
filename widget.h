@@ -1,6 +1,7 @@
 #ifndef WIDGET_H
 #define WIDGET_H
 
+#include <QMenu>
 #include <QPaintEvent>
 #include <QThread>
 #include <QWidget>
@@ -15,14 +16,18 @@ public:
 protected:
     void paintEvent(QPaintEvent *event) Q_DECL_OVERRIDE;
     void mousePressEvent(QMouseEvent *event)  Q_DECL_OVERRIDE;
+//    void resizeEvent(QResizeEvent *event)  Q_DECL_OVERRIDE;
 public slots:
     void incomingImage();
+    void loadSource();
 signals:
     void seek(int);
 private:
 //    QSharedPointer<mediaSource> media;
     mediaSource *media;
     QThread *worker;
+
+    QMenu *context_m;
 };
 
 #endif // WIDGET_H
