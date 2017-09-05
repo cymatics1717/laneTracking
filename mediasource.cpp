@@ -6,8 +6,24 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 
+static cv::Point2f median(const cv::Vec4i& line){
+    return cv::Point2f((line[0]+line[2])/2,(line[1]+line[3])/2);
+}
+static double euclidDist(const cv::Vec4i& line)
+{
+    return static_cast<double>((line[0] - line[2]) * (line[0] - line[2]) + (line[1] - line[3]) * (line[1] - line[3]));
+}
+static double angle(const cv::Vec4i& line)
+{
+    return atan2(line[2] - line[0], line[3] - line[1]) * 180 / CV_PI;
+}
+
 static bool comp (const cv::Vec4i& lhs, const cv::Vec4i& rhs) {
-    return lhs[1] + lhs[3]> rhs[1] + rhs[3];
+    return euclidDist(lhs)> euclidDist(rhs);
+}
+
+static bool compAngle (const cv::Vec4i& lhs, const cv::Vec4i& rhs) {
+    return angle(lhs)> angle(rhs);
 }
 
 mediaSource::mediaSource(QObject *parent) : mediaSource("",parent)
@@ -43,65 +59,67 @@ const QImage &mediaSource::BWImage() const
     return bwImage;
 }
 
-void mediaSource::removeLines(const std::vector<cv::Vec4i>& lines, std::set<cv::Vec4i,vec4iComp> &out)
+void mediaSource::splitLines(const std::vector<cv::Vec4i> &lines, dumpbin &dump,curves &out, double min_door, double max_door)
 {
-    std::set<cv::Vec4i,vec4iComp> left(comp),right(comp);
     int r_max_val = 80, r_min_val = 40;
     int l_max_val = 150, l_min_val = 100;
 
     double y_percent = 0.6;
     int max_x = current.width(), max_y = current.height();
-    static double  last_left= 120;
-    static double  last_right= 70;
-    double left_avg_ang=0,right_avg_ang=0;
     for (size_t i = 0; i < lines.size(); i++)
     {
         cv::Vec4i l = lines[i];
-        double theta_deg = atan2(l[2] - l[0], l[3] - l[1]) * 180 / CV_PI;
+        double theta_deg = angle(l);
         if ((r_min_val < theta_deg && theta_deg < r_max_val) || (l_min_val < theta_deg && theta_deg < l_max_val))
         {
             if((l[3]>y_percent * max_y )&&(l[1])>y_percent * max_y){
-//                out.insert(l);
-                if(l[0]+l[2]<max_x){
-                    left_avg_ang += theta_deg;
-                    left.insert(l);
-                } else {
-                    right_avg_ang += theta_deg;
-                    right.insert(l);
-                }
+                dump.emplace(l,theta_deg);
             }
         }
     }
-    left_avg_ang/=left.size();
-    right_avg_ang/=right.size();
 
+    ////////////////////////////////////////////////////////////////////////
+    std::vector<std::vector<cv::Point2f>> groups;
+    double pivot = std::numeric_limits<double>::max();
+    std::vector<cv::Point2f> tmp;
+    for(auto x:dump){
+        if(pivot-x.second>=max_door){
+            if(tmp.size()>0){
+                groups.push_back(tmp);
+                cv::Vec4f line;
+                cv::fitLine(tmp,line, CV_DIST_L2,0,0.01,0.01);
+                out.push_back(line);
+            }
+            tmp.clear();
+//            tmp.push_back(median(x.first));
+            tmp.push_back(cv::Point2f(x.first[0],x.first[1]));
+            tmp.push_back(cv::Point2f(x.first[2],x.first[3]));
+        } else if(pivot-x.second<min_door){
+//            tmp.push_back(median(x.first));
+            tmp.push_back(cv::Point2f(x.first[0],x.first[1]));
+            tmp.push_back(cv::Point2f(x.first[2],x.first[3]));
+        }
+        pivot = x.second;
+    }
+    std::cout<<groups.size()<<std::endl;
+    ////////////////////////////////////////////////////////////////////////
 
-    double delta_percent = 0.001;
+}
+
+static void drawLine(cv::Mat& image, double theta, double rho, cv::Scalar color,double cap)
+{
+    if (theta < CV_PI/4. || theta > 3.*CV_PI/4.)// ~vertical line
     {
-        cv::Vec4i first = *left.begin();
-        for(const cv::Vec4i& l :left){
-            double theta_deg = atan2(l[0] - first[2], l[1] - first[3]) * 180 / CV_PI;
-            if ((r_min_val < theta_deg && theta_deg < r_max_val) || (l_min_val < theta_deg && theta_deg < l_max_val)
-                    || l[0]+l[2]-first[0]-first[2]<delta_percent*max_x)
-            {
-                out.insert(l);
-            }
-        }
+       cv::Point pt1(rho/cos(theta), 0);
+       cv::Point pt2((rho - cap * sin(theta))/cos(theta), cap);
+       cv::line( image, pt1, pt2, color, 6);
     }
+    else
     {
-        cv::Vec4i first = *right.begin();
-        for(const cv::Vec4i& l :right){
-            double theta_deg = atan2(l[0] - first[2], l[1] - first[3]) * 180 / CV_PI;
-            if ((r_min_val < theta_deg && theta_deg < r_max_val) || (l_min_val < theta_deg && theta_deg < l_max_val)
-                    || l[0]+l[2]-first[0]-first[2]<delta_percent*max_x)
-            {
-                out.insert(l);
-            }
-        }
+       cv::Point pt1(0, rho/sin(theta));
+       cv::Point pt2(image.cols, (rho - image.cols * cos(theta))/sin(theta));
+       cv::line(image, pt1, pt2, cv::Scalar(255,0,0), 6);
     }
-
-//    std::cout<<left_avg_ang<<","<<right_avg_ang<<QString("\t[%1]/%2 ").arg(lines.size()).arg(out.size()).toStdString()<<std::endl;
-
 }
 
 void mediaSource::run()
@@ -141,15 +159,37 @@ void mediaSource::run()
 
 ////////////////////////////////////////////////////////////////////////
         std::vector<cv::Vec4i> lines;
-        std::set<cv::Vec4i,vec4iComp> out(comp);
         int min_len_val = 8;
         cv::HoughLinesP(edges, lines, 1, CV_PI / 180, 10, min_len_val, 0);
-        removeLines(lines,out);
-        for(const cv::Vec4i& l:out){
+
+        curves out;
+        dumpbin dump(compAngle);
+        splitLines(lines,dump,out,10,8);
+        double cap_y = frame.rows*.6;
+        for(auto line:out){
+//            std::cout << line;
+            double cos_theta = line[0];
+            double sin_theta = line[1];
+            double x0 = line[2], y0 = line[3];
+            double tho = atan2(sin_theta, cos_theta) + CV_PI / 2.0;//angle
+            double rho = y0 * cos_theta - x0 * sin_theta;
+            drawLine(frame,tho, rho, cv::Scalar(0,0,255),cap_y);
+//            cv::line(frame,cv::Point(edges.cols-1,righty),cv::Point(0,lefty),cv::Scalar(255,0,0),2);
+        }
+//        std::cout << std::endl;
+        //////////////////////////////////////////////////////////////////////////
+
+        for(auto v:dump){
+            auto l = v.first;
+            std::cout<< angle(l)<<",";
             cv::line(frame, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), cv::Scalar(255, 0, 255), 2, CV_AA);
         }
-//        cv::line(frame, cv::Point(frame.cols/2, frame.rows), cv::Point(frame.cols/2, 0), cv::Scalar(255, 0, 255), 2, CV_AA);
-//        cv::line(frame, cv::Point(0, frame.rows*.6), cv::Point(frame.cols, frame.rows*.6), cv::Scalar(255, 0, 255), 2, CV_AA);
+        //////////////////////////////////////////////////////////////////////////
+
+
+        std::cout<<std::endl<<std::string(80,'=')<<std::endl;
+        cv::line(frame, cv::Point(frame.cols/2, frame.rows), cv::Point(frame.cols/2, 0), cv::Scalar(255, 0, 255), 2, CV_AA);
+        cv::line(frame, cv::Point(0, cap_y), cv::Point(frame.cols, cap_y), cv::Scalar(255, 0, 255), 2, CV_AA);
 //////////////////////////////////////////////////////////////////////////
         int framepos = cap.get(CV_CAP_PROP_POS_FRAMES);
 

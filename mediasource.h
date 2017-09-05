@@ -7,6 +7,8 @@
 #include "opencv2/opencv.hpp"
 
 typedef bool (*vec4iComp) (const cv::Vec4i& lhs, const cv::Vec4i& rhs);
+typedef std::map<cv::Vec4i,double,vec4iComp> dumpbin;
+typedef std::vector<cv::Vec4f> curves;
 
 class mediaSource : public QObject
 {
@@ -20,7 +22,7 @@ public slots:
     int setSource(QString source);
     const QImage& currentImage() const;
     const QImage& BWImage() const;
-    void removeLines(const std::vector<cv::Vec4i>& lines, std::set<cv::Vec4i,vec4iComp> &out);
+    void splitLines(const std::vector<cv::Vec4i> &lines, dumpbin &dump,curves &out, double min_door, double max_door);
     void run();
     void stop();
     void seek(int pos);
