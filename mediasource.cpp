@@ -62,7 +62,7 @@ const QImage &mediaSource::BWImage() const
 void mediaSource::splitLines(const std::vector<cv::Vec4i> &lines, dumpbin &dump,curves &out, double min_door, double max_door)
 {
     int r_max_val = 80, r_min_val = 40;
-    int l_max_val = 150, l_min_val = 100;
+    int l_max_val = 160, l_min_val = 100;
 
     double y_percent = 0.6;
     int max_x = current.width(), max_y = current.height();
@@ -101,7 +101,7 @@ void mediaSource::splitLines(const std::vector<cv::Vec4i> &lines, dumpbin &dump,
         }
         pivot = x.second;
     }
-    std::cout<<groups.size()<<std::endl;
+//    std::cout<<groups.size()<<std::endl;
     ////////////////////////////////////////////////////////////////////////
 
 }
@@ -135,7 +135,7 @@ void mediaSource::run()
     // strips
 //    startframe =3.3/18.33* total;
     // poor light
-//    startframe =6.5/18.33* total;
+//    startframe =6.56/18.33* total;
     qDebug()<< total << cap.set(CV_CAP_PROP_POS_FRAMES, startframe);
 
     cv::Mat edges, buf, frame;
@@ -144,52 +144,85 @@ void mediaSource::run()
 
     while(cap.read(frame))
     {
-        cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(35, 35));
-        cv::morphologyEx(frame, buf, cv::MORPH_CLOSE, element);
-//        cv::medianBlur(buf,buf,3);
-//        cv::GaussianBlur(buf, buf, cv::Size(3,3), 0, 0);
-        cv::bitwise_not(buf, edges);
+//        cv::imwrite(QString("/home/wayne/img%1.jpg").arg(cap.get(CV_CAP_PROP_POS_FRAMES)).toStdString(),frame);
+        double cut_y = 0.62;
 
-        cv::cvtColor(edges, edges, CV_BGR2GRAY);
-        cv::adaptiveThreshold(edges, edges,255,CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY,19,6);
+//        cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
+//        cv::morphologyEx(frame, buf, cv::MORPH_CLOSE, element);
+//        cv::medianBlur(buf,buf,3);
+//        cv::bitwise_not(buf, edges);
+
+        cv::cvtColor(frame, edges, CV_BGR2GRAY);
+        cv::adaptiveThreshold(edges, edges,255,CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY,11,9);
 
 //        element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2, 2));
 //        cv::morphologyEx(edges, edges, cv::MORPH_DILATE, element);
-        cv::Canny(edges, edges, 0, 1, 3);
+        cv::Mat yellow,white,mask;
+        cv::cvtColor(frame,buf,CV_BGR2HSV);
+        cv::inRange(buf,cv::Scalar(0, 50, 50), cv::Scalar(60, 200, 200),yellow);
+        cv::cvtColor(frame,buf,CV_BGR2GRAY);
+        cv::inRange(buf, cv::Scalar(50, 50, 50), cv::Scalar(255, 255, 255), white);
+//        mask = yellow + white;
+//        cv::bitwise_or(yellow,edges,edges);
+//        mask(cv::Rect(0,0,frame.cols,frame.rows*cut_y)).setTo(0);
+//        yellow.copyTo(edges);
+        white.copyTo(edges);
+//        cv::GaussianBlur(edges, edges, cv::Size(3,3), 0, 0);
+        cv::Canny(edges, edges, 0, 1);
+//        edges(cv::Rect(0,0,frame.cols,frame.rows*cut_y)).setTo(0);
+//        mask.copyTo(edges);
+//        cv::bitwise_and(edges,mask,edges);
+
+//        element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
+//        cv::morphologyEx(edges, edges, cv::MORPH_CLOSE, element);
+
 
 ////////////////////////////////////////////////////////////////////////
         std::vector<cv::Vec4i> lines;
-        int min_len_val = 8;
+        int min_len_val = 5;
         cv::HoughLinesP(edges, lines, 1, CV_PI / 180, 10, min_len_val, 0);
 
         curves out;
         dumpbin dump(compAngle);
         splitLines(lines,dump,out,10,8);
-        double cap_y = frame.rows*.6;
-        for(auto line:out){
-//            std::cout << line;
-            double cos_theta = line[0];
-            double sin_theta = line[1];
-            double x0 = line[2], y0 = line[3];
-            double tho = atan2(sin_theta, cos_theta) + CV_PI / 2.0;//angle
-            double rho = y0 * cos_theta - x0 * sin_theta;
-            drawLine(frame,tho, rho, cv::Scalar(0,0,255),cap_y);
-//            cv::line(frame,cv::Point(edges.cols-1,righty),cv::Point(0,lefty),cv::Scalar(255,0,0),2);
-        }
-//        std::cout << std::endl;
-        //////////////////////////////////////////////////////////////////////////
+//        for(auto line:out){
+////            std::cout << line;
+//            double cos_theta = line[0];
+//            double sin_theta = line[1];
+//            double x0 = line[2], y0 = line[3];
+//            double tho = atan2(sin_theta, cos_theta) + CV_PI / 2.0;//angle
+//            double rho = y0 * cos_theta - x0 * sin_theta;
+//            drawLine(frame,tho, rho, cv::Scalar(0,0,255),cap_y);
+////            cv::line(frame,cv::Point(edges.cols-1,righty),cv::Point(0,lefty),cv::Scalar(255,0,0),2);
+//        }
+////        std::cout << std::endl;
+//        //////////////////////////////////////////////////////////////////////////
 
         for(auto v:dump){
             auto l = v.first;
-            std::cout<< angle(l)<<",";
+//            std::cout<< angle(l)<<",";
             cv::line(frame, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), cv::Scalar(255, 0, 255), 2, CV_AA);
         }
-        //////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+//        std::vector<std::vector<cv::Point> > contours;
+//        cv::findContours( edges, contours,CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE );
+//        cv::drawContours( frame, contours,-1 , cv::Scalar( 255, 0, 255 ));
+//        std::cout<< contours.size()<<":";
+//        for(auto v:contours){
+//            std::cout<< v<<",";
+//        }
+//        std::cout <<std::endl;
 
 
-        std::cout<<std::endl<<std::string(80,'=')<<std::endl;
-        cv::line(frame, cv::Point(frame.cols/2, frame.rows), cv::Point(frame.cols/2, 0), cv::Scalar(255, 0, 255), 2, CV_AA);
-        cv::line(frame, cv::Point(0, cap_y), cv::Point(frame.cols, cap_y), cv::Scalar(255, 0, 255), 2, CV_AA);
+//        for(int idx = 0 ; idx >= 0; idx = hierarchy[idx][0] )
+//        {
+//            cv::Scalar color( 255, 0, 255 );
+//            cv::drawContours( frame, contours, idx, color, CV_FILLED, 8, hierarchy );
+//        }
+//////////////////////////////////////////////////////////////////////////
+//        std::cout<<std::endl<<std::string(80,'=')<<std::endl;
+//        cv::line(frame, cv::Point(frame.cols/2, frame.rows), cv::Point(frame.cols/2, 0), cv::Scalar(255, 0, 255), 2, CV_AA);
+//        cv::line(frame, cv::Point(0, cap_y), cv::Point(frame.cols, cap_y), cv::Scalar(255, 0, 255), 2, CV_AA);
 //////////////////////////////////////////////////////////////////////////
         int framepos = cap.get(CV_CAP_PROP_POS_FRAMES);
 
@@ -203,11 +236,12 @@ void mediaSource::run()
         cv::putText(frame,txt.toStdString(),cv::Point2d(0,30),CV_FONT_NORMAL, .8, cv::Scalar(255,0, 255));
         bwImage = QImage(edges.data, edges.cols, edges.rows, edges.step, QImage::Format_Grayscale8);
         cvtColor(frame, buf,CV_BGR2RGB);
+
         current = QImage(buf.data, buf.cols, buf.rows, buf.step, QImage::Format_RGB888);
         emit incoming();
 
 //////////////////////////////////////////////////////////////////////////
-        QThread::msleep(5);
+//        QThread::msleep(5);
         writer.write(frame);
     }
 }
