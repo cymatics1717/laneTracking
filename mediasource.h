@@ -18,6 +18,8 @@ public:
     mediaSource(QString name,QObject *parent = nullptr);
 signals:
     void incoming();
+protected:
+    void timerEvent(QTimerEvent *event) Q_DECL_OVERRIDE;
 public slots:
     int setSource(QString source);
     const QImage& currentImage() const;
@@ -28,11 +30,13 @@ public slots:
     void seek(int pos);
 private:
     cv::VideoCapture cap;
+    cv::VideoWriter writer;
+
     QString source;
     QImage current;
     QImage bwImage;
     QDateTime epoch;
-    int startframe;
+//    int startframe;
 };
 
 #endif // MEDIASOURCE_H

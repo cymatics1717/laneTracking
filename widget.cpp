@@ -3,20 +3,16 @@
 #include <QTimer>
 #include <QDebug>
 #include <QFileDialog>
-widget::widget(QWidget *parent) : QWidget(parent),media(new mediaSource)
+widget::widget(QWidget *parent) : QWidget(parent),media(new mediaSource(this))
 {
     connect(this,SIGNAL(seek(int)),media,SLOT(seek(int)));
 
-    worker = new QThread;
-    media->moveToThread(worker);
-    connect(worker, SIGNAL(started()), media, SLOT(run()));
+//    worker = new QThread;
+//    media->moveToThread(worker);
+//    connect(worker, SIGNAL(started()), media, SLOT(run()));
     connect(media,SIGNAL(incoming()),SLOT(incomingImage()));
-    connect(worker, SIGNAL(finished()), worker, SLOT(deleteLater()));
-    connect(worker, SIGNAL(finished()), media, SLOT(deleteLater()));
-
-//    QTimer  *timer = new QTimer(this);
-//    connect(timer,SIGNAL(timeout()),media,SLOT(run()));
-    //    timer->start(30);
+//    connect(worker, SIGNAL(finished()), worker, SLOT(deleteLater()));
+//    connect(worker, SIGNAL(finished()), media, SLOT(deleteLater()));
 
     setContextMenuPolicy(Qt::ActionsContextMenu);
     context_m = new QMenu(this);
@@ -24,7 +20,8 @@ widget::widget(QWidget *parent) : QWidget(parent),media(new mediaSource)
 
 
     media->setSource("/home/wayne/Downloads/highwayKR.avi");
-    worker->start();
+//    media->setSource("");
+//    worker->start();
 
 }
 
@@ -43,10 +40,10 @@ void widget::paintEvent(QPaintEvent *event)
     p.drawImage(media->currentImage().width(),0,media->BWImage());
 }
 
-void widget::mousePressEvent(QMouseEvent *event)
+void widget::mouseReleaseEvent(QMouseEvent *event)
 {
-    qDebug()<<QString(100,'=') <<event->pos()<<","<<width();
-//    emit seek(event->pos().x()*100/width());
+    qDebug()<<QString(60,'=') <<event->pos()<<","<<width();
+    emit seek(event->pos().x()*100/width());
 
 //    context_m->exec(QCursor::pos());
 }
