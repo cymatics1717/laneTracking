@@ -5,6 +5,7 @@
 #include <QThread>
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+#include "opencv2/videoio.hpp"
 
 static cv::Point2f median(const cv::Vec4i& line){
     return cv::Point2f((line[0]+line[2])/2,(line[1]+line[3])/2);
@@ -87,7 +88,7 @@ void mediaSource::splitLines(const std::vector<cv::Vec4i> &lines, dumpbin &dump,
             if(tmp.size()>0){
                 groups.push_back(tmp);
                 cv::Vec4f line;
-                cv::fitLine(tmp,line, CV_DIST_L2,0,0.01,0.01);
+                cv::fitLine(tmp,line, cv::DIST_L2,0,0.01,0.01);
                 out.push_back(line);
             }
             tmp.clear();
@@ -127,7 +128,7 @@ void mediaSource::run()
     QDateTime last = QDateTime::currentDateTime();
     epoch = last;
 
-    int total = cap.get(CV_CAP_PROP_FRAME_COUNT);
+    int total = cap.get(cv::CAP_PROP_FRAME_COUNT);
 
     startframe =0;
     // yellow lane
@@ -136,11 +137,12 @@ void mediaSource::run()
 //    startframe =3.3/18.33* total;
     // poor light
 //    startframe =6.5/18.33* total;
-    qDebug()<< total << cap.set(CV_CAP_PROP_POS_FRAMES, startframe);
+    qDebug()<< total << cap.set(cv::CAP_PROP_POS_FRAMES, startframe);
 
     cv::Mat edges, buf, frame;
-    cv::Size S = cv::Size(cap.get(CV_CAP_PROP_FRAME_WIDTH),cap.get(CV_CAP_PROP_FRAME_HEIGHT));
-    cv::VideoWriter writer("/home/wayne/postProc.avi", CV_FOURCC('M', 'J', 'P', 'G'),cap.get(CV_CAP_PROP_FPS), S,true);
+    cv::Size S = cv::Size(cap.get(cv::CAP_PROP_FRAME_WIDTH),cap.get(cv::CAP_PROP_FRAME_HEIGHT));
+    cv::VideoWriter writer;
+    writer.open("/home/wayne/postProc.avi", writer.fourcc('M', 'J', 'P', 'G'),cap.get(cv::CAP_PROP_FPS), S,true);
 
     while(cap.read(frame))
     {
@@ -150,8 +152,8 @@ void mediaSource::run()
 //        cv::GaussianBlur(buf, buf, cv::Size(3,3), 0, 0);
         cv::bitwise_not(buf, edges);
 
-        cv::cvtColor(edges, edges, CV_BGR2GRAY);
-        cv::adaptiveThreshold(edges, edges,255,CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY,19,6);
+        cv::cvtColor(edges, edges, cv::COLOR_BGR2GRAY);
+        cv::adaptiveThreshold(edges, edges,255,cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY,19,6);
 
 //        element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2, 2));
 //        cv::morphologyEx(edges, edges, cv::MORPH_DILATE, element);
@@ -182,16 +184,16 @@ void mediaSource::run()
         for(auto v:dump){
             auto l = v.first;
             std::cout<< angle(l)<<",";
-            cv::line(frame, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), cv::Scalar(255, 0, 255), 2, CV_AA);
+            cv::line(frame, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), cv::Scalar(255, 0, 255), 2, cv::LINE_AA);
         }
         //////////////////////////////////////////////////////////////////////////
 
 
         std::cout<<std::endl<<std::string(80,'=')<<std::endl;
-        cv::line(frame, cv::Point(frame.cols/2, frame.rows), cv::Point(frame.cols/2, 0), cv::Scalar(255, 0, 255), 2, CV_AA);
-        cv::line(frame, cv::Point(0, cap_y), cv::Point(frame.cols, cap_y), cv::Scalar(255, 0, 255), 2, CV_AA);
+        cv::line(frame, cv::Point(frame.cols/2, frame.rows), cv::Point(frame.cols/2, 0), cv::Scalar(255, 0, 255), 2, cv::LINE_AA);
+        cv::line(frame, cv::Point(0, cap_y), cv::Point(frame.cols, cap_y), cv::Scalar(255, 0, 255), 2, cv::LINE_AA);
 //////////////////////////////////////////////////////////////////////////
-        int framepos = cap.get(CV_CAP_PROP_POS_FRAMES);
+        int framepos = cap.get(cv::CAP_PROP_POS_FRAMES);
 
         QDateTime now = QDateTime::currentDateTime();
         QString txt = QString("[%1][%2/%3] %4ms, fps = %5")
@@ -200,9 +202,9 @@ void mediaSource::run()
                 .arg((framepos-startframe)*1000.0/epoch.msecsTo(now), 0, 'f', 2);
         last = now;
 
-        cv::putText(frame,txt.toStdString(),cv::Point2d(0,30),CV_FONT_NORMAL, .8, cv::Scalar(255,0, 255));
+        cv::putText(frame,txt.toStdString(),cv::Point2d(0,30),cv::FONT_HERSHEY_SIMPLEX, .8, cv::Scalar(255,0, 255));
         bwImage = QImage(edges.data, edges.cols, edges.rows, edges.step, QImage::Format_Grayscale8);
-        cvtColor(frame, buf,CV_BGR2RGB);
+        cvtColor(frame, buf,cv::COLOR_BGR2RGB);
         current = QImage(buf.data, buf.cols, buf.rows, buf.step, QImage::Format_RGB888);
         emit incoming();
 
@@ -220,8 +222,8 @@ void mediaSource::stop()
 void mediaSource::seek(int pos)
 {
 //    if(pos<0||pos>100) return;
-    int total = cap.get(CV_CAP_PROP_FRAME_COUNT);
+    int total = cap.get(cv::CAP_PROP_FRAME_COUNT);
 //    double pos =3/18.33;
-    qDebug()<<pos<< total << cap.set(CV_CAP_PROP_POS_FRAMES, pos*total/100);
+    qDebug()<<pos<< total << cap.set(cv::CAP_PROP_POS_FRAMES, pos*total/100);
 }
 

@@ -23,7 +23,7 @@ widget::widget(QWidget *parent) : QWidget(parent),media(new mediaSource)
     context_m->addAction("load Video sample",this,SLOT(loadSource()));
 
 
-    media->setSource("/home/wayne/Downloads/highwayKR.avi");
+    media->setSource("");
     worker->start();
 
 }
